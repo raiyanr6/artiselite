@@ -1,7 +1,6 @@
-# Use Node.js (Lightweight version)
-FROM node:18-alpine
+# Stage 1: Build the static files
+FROM node:18-alpine AS build
 
-# Set the working directory inside the container
 WORKDIR /app
 
 # Copy package files first (better caching)
@@ -13,8 +12,16 @@ RUN npm install
 # Copy the rest of your app code
 COPY . .
 
-# Expose the Vite port
-EXPOSE 5173
+# Build the production static files
+RUN npm run build
 
-# Start the app
-CMD ["npm", "run", "dev"]
+# Stage 2: Serve the built files with Nginx
+FROM nginx:alpine
+
+# Copy built static files from the build stage into Nginx's serving directory
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Nginx serves on port 80 by default
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
