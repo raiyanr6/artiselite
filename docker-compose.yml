@@ -45,12 +45,13 @@ services:
       - wms-network
     restart: unless-stopped
 
-  # 3. Frontend (React, built to static files and served via its own Nginx stage)
+  # 3. Frontend (React, built to static files at image-build time and served via its own Nginx stage)
   frontend:
-    build: ./template  # <--- CHECK THIS: Ensure this folder name matches your React folder
+    build:
+      context: ./template
+      args:
+        VITE_API_URL: /api
     container_name: wms-frontend
-    environment:
-      VITE_API_URL: /api
     depends_on:
       - backend
     networks:
