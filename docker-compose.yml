@@ -35,7 +35,7 @@ services:
       # We don't need to override user/pass because your file defaults (3112) match the DB above!
 
       # Allow frontend access
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://frontend:5173,http://localhost
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://frontend,http://localhost
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,14 +45,11 @@ services:
       - wms-network
     restart: unless-stopped
 
-  # 3. Frontend (React/Vite)
+  # 3. Frontend (React, built to static files and served via its own Nginx stage)
   frontend:
     build: ./template  # <--- CHECK THIS: Ensure this folder name matches your React folder
     container_name: wms-frontend
-    ports:
-      - "5173:5173"
     environment:
-
       VITE_API_URL: /api
     depends_on:
       - backend
@@ -60,7 +57,7 @@ services:
       - wms-network
     restart: unless-stopped
 
-  # 4. Nginx (Optional - acts as the entry point)
+  # 4. Nginx (entry point / reverse proxy)
   nginx:
     image: nginx:alpine
     container_name: wms-nginx
