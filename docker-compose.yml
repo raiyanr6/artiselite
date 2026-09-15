@@ -35,7 +35,7 @@ services:
       # We don't need to override user/pass because your file defaults (3112) match the DB above!
 
       # Allow frontend access
-      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://frontend,http://localhost
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://frontend,http://localhost,http://18.225.4.32
     depends_on:
       postgres:
         condition: service_healthy
