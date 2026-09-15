@@ -1,12 +1,11 @@
 package org.example.artiselite.controller;
 
+import jakarta.validation.Valid;
 import org.example.artiselite.dto.auth.*;
-import org.example.artiselite.security.JwtUtil;
+import org.example.artiselite.service.AuthService;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,32 +13,15 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AuthController {
 
-    private final JwtUtil jwtUtil;
+    private final AuthService authService;
 
     @PostMapping("/register")
-    public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
-        return handleBypassAuth("recruiter@demo.com");
+    public ResponseEntity<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.ok(authService.register(request));
     }
 
     @PostMapping("/login")
-    public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
-        return handleBypassAuth("recruiter@demo.com");
-    }
-
-    private ResponseEntity<AuthResponse> handleBypassAuth(String email) {
-        // Build a dummy user with ADMIN authority
-        UserDetails dummyUser = User.builder()
-                .username(email)
-                .password("dummy")
-                .authorities("ADMIN")
-                .build();
-
-        String token = jwtUtil.generateToken(dummyUser);
-
-        // Uses standard constructor fallback to avoid builder mismatch issues
-        AuthResponse response = new AuthResponse();
-        response.setToken(token);
-
-        return ResponseEntity.ok(response);
+    public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
+        return ResponseEntity.ok(authService.login(request));
     }
 }
