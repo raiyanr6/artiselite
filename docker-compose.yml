@@ -1,51 +1,26 @@
 version: '3.8'
 
 services:
-  # 1. Database (Configured to match your local settings)
-  postgres:
-    image: postgres:15-alpine
-    container_name: wms-postgres
-    environment:
-      POSTGRES_DB: db              # Matches your application.properties
-      POSTGRES_USER: postgres      # Matches your application.properties
-      POSTGRES_PASSWORD: 3112      # Matches your application.properties
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    networks:
-      - wms-network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # 2. Backend (Spring Boot)
+  # Backend (Spring Boot) — now connects to AWS RDS instead of a local container
   backend:
     build: .
     container_name: wms-backend
     ports:
       - "8090:8090"
     environment:
-      # This overrides 'localhost' with 'postgres' (the service name above)
-      DB_HOST: postgres
+      DB_HOST: db-artiselite.cn2mwqaw6zft.us-east-2.rds.amazonaws.com
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
       SERVER_PORT: 8090
 
-      # We don't need to override user/pass because your file defaults (3112) match the DB above!
-
-      # Allow frontend access
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173,http://frontend,http://localhost,http://18.225.4.32
-    depends_on:
-      postgres:
-        condition: service_healthy
     volumes:
-      - uploads_data:/app/uploads # Persist uploads
+      - uploads_data:/app/uploads
     networks:
       - wms-network
     restart: unless-stopped
 
-  # 3. Frontend (React, built to static files at image-build time and served via its own Nginx stage)
+  # Frontend (React, built to static files at image-build time and served via its own Nginx stage)
   frontend:
     build:
       context: ./template
@@ -58,7 +33,7 @@ services:
       - wms-network
     restart: unless-stopped
 
-  # 4. Nginx (entry point / reverse proxy)
+  # Nginx (entry point / reverse proxy)
   nginx:
     image: nginx:alpine
     container_name: wms-nginx
@@ -74,7 +49,6 @@ services:
       - wms-network
 
 volumes:
-  postgres_data:
   uploads_data:
 
 networks:
