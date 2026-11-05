@@ -45,3 +45,20 @@ dist/
 template/.env.local
 .env
 .DS_Store
+
+### Secrets: every .env variant (.env.local, .env.production, ...) in any folder; templates stay tracked ###
+.env.*
+!.env.example
+
+### Runtime output (written by the running app, not source) ###
+logs/
+*.log
+uploads/
+
+### Python (agent-service also has its own .gitignore) ###
+__pycache__/
+.venv/
+.pytest_cache/
+
+### Windows ###
+Thumbs.db

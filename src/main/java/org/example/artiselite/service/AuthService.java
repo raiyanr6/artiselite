@@ -5,13 +5,17 @@ import org.example.artiselite.dto.auth.RegisterRequest;
 import org.example.artiselite.dto.auth.AuthResponse;
 import org.example.artiselite.enums.Role;
 import org.example.artiselite.entity.User;
+import org.example.artiselite.exception.ConflictException;
 import org.example.artiselite.repository.UserRepository;
 import org.example.artiselite.security.*;
 
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -34,12 +38,19 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        Role role = request.getRole() != null ? request.getRole() : Role.OPERATOR;
+
+        // /register is public, so only a logged-in admin may create anything above OPERATOR
+        if (role != Role.OPERATOR && !isCurrentUserAdmin()) {
+            throw new AccessDeniedException("Only an admin can create " + role + " accounts");
+        }
+
         if (userRepository.existsByUsername(request.getUsername())) {
-            throw new RuntimeException("Username already exists");
+            throw new ConflictException("Username already exists");
         }
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already exists");
+            throw new ConflictException("Email already exists");
         }
 
         User user = User.builder()
@@ -47,10 +58,10 @@ public class AuthService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
-                .role(request.getRole() != null ? request.getRole() : Role.OPERATOR)
+                .role(role)
                 .phoneNumber(request.getPhoneNumber())
                 .isActive(true)
-                .permissions(getDefaultPermissions(request.getRole()))
+                .permissions(getDefaultPermissions(role))
                 .build();
 
         user = userRepository.save(user);
@@ -99,6 +110,12 @@ public class AuthService {
                 .role(user.getRole())
                 .permissions(user.getPermissions())
                 .build();
+    }
+
+    private boolean isCurrentUserAdmin() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return auth != null && auth.getAuthorities().stream()
+                .anyMatch(a -> Role.ADMIN.name().equals(a.getAuthority()));
     }
 
     private Set<String> getDefaultPermissions(Role role) {

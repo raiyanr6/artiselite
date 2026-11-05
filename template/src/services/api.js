@@ -9,32 +9,39 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add token
-api.interceptors.request.use(
-  (config) => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
+// The LangGraph agent service (Python). Same login token, so it acts with the user's own permissions.
+const AGENT_BASE_URL = import.meta.env.VITE_AGENT_URL || 'http://localhost:8000';
+
+const agentApi = axios.create({
+  baseURL: AGENT_BASE_URL,
+  headers: {
+    'Content-Type': 'application/json',
   },
-  (error) => {
-    return Promise.reject(error);
+});
+
+// Request interceptor to add token
+const addToken = (config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
   }
-);
+  return config;
+};
 
 // Response interceptor for error handling
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      window.location.href = '/login';
-    }
-    return Promise.reject(error);
+const logoutOn401 = (error) => {
+  if (error.response?.status === 401) {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    window.location.href = '/login';
   }
-);
+  return Promise.reject(error);
+};
+
+[api, agentApi].forEach((instance) => {
+  instance.interceptors.request.use(addToken, (error) => Promise.reject(error));
+  instance.interceptors.response.use((response) => response, logoutOn401);
+});
 
 // Auth API
 export const authAPI = {
@@ -75,6 +82,18 @@ export const outboundAPI = {
 // Dashboard API
 export const dashboardAPI = {
   getStats: () => api.get('/dashboard'),
+};
+
+// Chat Assistant API (conversationId is omitted on the first message; the reply returns one to reuse)
+export const chatAPI = {
+  ask: (message, conversationId) => api.post('/chat', { message, conversationId }),
+};
+
+// Agent API (LangGraph). A reply is either { threadId, reply } or { threadId, pendingAction }.
+// threadId is omitted on the first message; resume answers a pending action with approve/reject.
+export const agentAPI = {
+  ask: (message, threadId) => agentApi.post('/chat', { message, threadId }),
+  resume: (threadId, approved) => agentApi.post('/chat/resume', { threadId, approved }),
 };
 
 // Bulk Upload API

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import ChatPanel from './ChatPanel';
 import {
   Package,
   LayoutDashboard,
@@ -12,15 +13,23 @@ import {
   X,
   LogOut,
   User,
+  MessageCircle,
 } from 'lucide-react';
+
+const EMPTY_CHAT = { messages: [], conversationId: null, remainingToday: null, sending: false, pendingAction: null };
 
 const Layout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Chat lives here (not in ChatPanel) so closing the panel or changing page keeps the conversation
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chat, setChat] = useState(EMPTY_CHAT);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   const handleLogout = () => {
+    setChat(EMPTY_CHAT);
+    setChatOpen(false);
     logout();
     navigate('/login');
   };
@@ -123,6 +132,19 @@ const Layout = ({ children }) => {
           onClick={() => setSidebarOpen(false)}
         ></div>
       )}
+
+      {/* Chat assistant: floating button (hidden while open; the panel has its own close button) */}
+      {!chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          aria-label="Open assistant"
+          aria-haspopup="dialog"
+          className="fixed bottom-6 right-6 z-30 bg-primary-600 text-white p-4 rounded-full shadow-lg hover:bg-primary-700 transition-colors"
+        >
+          <MessageCircle className="w-6 h-6" />
+        </button>
+      )}
+      {chatOpen && <ChatPanel chat={chat} setChat={setChat} onClose={() => setChatOpen(false)} />}
     </div>
   );
 };

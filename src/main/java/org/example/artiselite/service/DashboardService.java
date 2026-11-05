@@ -1,10 +1,12 @@
 package org.example.artiselite.service;
 
+import org.example.artiselite.common.BusinessTime;
 import org.example.artiselite.dto.dashboard.RecentActivity;
 import org.example.artiselite.dto.dashboard.DashboardResponse;
 
 import org.example.artiselite.entity.AuditLog;
 import org.example.artiselite.repository.*;
+import org.example.artiselite.security.CostVisibility;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -28,12 +30,14 @@ public class DashboardService {
     private final OutboundRepository outboundRepository;
     private final AuditLogRepository auditLogRepository;
     private final ProductService productService;
+    private final CostVisibility costVisibility;
+    private final BusinessTime businessTime;
 
     @Transactional(readOnly = true)
     public DashboardResponse getDashboardStats() {
-        LocalDate today = LocalDate.now();
+        LocalDate today = businessTime.today();
 
-        Long totalProducts = productRepository.count();
+        Long totalProducts = productRepository.countActiveProducts();
         Long totalInboundToday = inboundRepository.countByDate(today);
         Long totalOutboundToday = outboundRepository.countByDate(today);
         Long lowStockCount = (long) productRepository.findLowStockProducts().size();
@@ -66,7 +70,8 @@ public class DashboardService {
                 .totalInboundToday(totalInboundToday)
                 .totalOutboundToday(totalOutboundToday)
                 .lowStockCount(lowStockCount)
-                .totalInventoryValue(productService.calculateTotalInventoryValuation())
+                .totalInventoryValue(costVisibility.canViewCostData()
+                        ? productService.calculateTotalInventoryValuation() : null)
                 .recentActivities(recentActivities)
                 .transactionVolumeChart(transactionVolumeChart)
                 .build();

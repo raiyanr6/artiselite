@@ -1,0 +1,9 @@
+# Exact versions so every machine (and later Docker) installs the same thing.
+# Install: python -m pip install -r requirements.txt
+fastapi==0.162.0          # web framework: the /chat and /chat/resume endpoints
+uvicorn==0.54.0           # server that runs the FastAPI app
+langgraph==1.2.20         # the agent graph, interrupt() pause/resume, in-memory checkpointer
+langchain-openai==1.7.4   # OpenAI chat model with tool calling
+httpx==0.28.1             # HTTP client for calling the Spring API
+python-dotenv==1.2.4      # reads agent-service/.env
+pytest==9.2.0             # tests

@@ -1,8 +1,12 @@
 package org.example.artiselite.service;
 
+import org.example.artiselite.common.BusinessTime;
 import org.example.artiselite.dto.outbound.*;
 import org.example.artiselite.entity.*;
 import org.example.artiselite.repository.*;
+import org.example.artiselite.exception.ConflictException;
+import org.example.artiselite.exception.ResourceNotFoundException;
+import org.example.artiselite.security.CostVisibility;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -32,15 +36,17 @@ public class OutboundService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final CostVisibility costVisibility;
+    private final BusinessTime businessTime;
 
     @Transactional
     public OutboundResponse createOutbound(OutboundRequest request, MultipartFile document) {
-        Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndIsDeletedFalse(request.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         // Check if sufficient stock is available
         if (product.getQuantity() < request.getQuantity()) {
-            throw new RuntimeException("Insufficient stock. Available: " +
+            throw new ConflictException("Insufficient stock. Available: " +
                     product.getQuantity() + ", Requested: " + request.getQuantity());
         }
 
@@ -53,7 +59,7 @@ public class OutboundService {
                 .product(product)
                 .quantity(request.getQuantity())
                 .dispatchDate(request.getDispatchDate() != null ?
-                        request.getDispatchDate() : LocalDate.now())
+                        request.getDispatchDate() : businessTime.today())
                 .customerName(request.getCustomerName())
                 .salesOrderReference(request.getSalesOrderReference())
                 .batchNumber(batchNumbers)
@@ -140,7 +146,7 @@ public class OutboundService {
     @Transactional(readOnly = true)
     public OutboundResponse getOutbound(Long id) {
         Outbound outbound = outboundRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Outbound not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Outbound not found"));
         return mapToResponse(outbound);
     }
 
@@ -163,8 +169,11 @@ public class OutboundService {
         response.setSalesOrderReference(outbound.getSalesOrderReference());
         response.setDocumentPath(outbound.getDocumentPath());
         response.setBatchNumber(outbound.getBatchNumber());
-        response.setUnitValue(outbound.getUnitValue());
-        response.setTotalValue(outbound.getTotalValue());
+        // unitValue/totalValue are derived from average cost, so they count as cost data
+        if (costVisibility.canViewCostData()) {
+            response.setUnitValue(outbound.getUnitValue());
+            response.setTotalValue(outbound.getTotalValue());
+        }
         response.setNotes(outbound.getNotes());
 
         if (outbound.getDispatchedBy() != null) {

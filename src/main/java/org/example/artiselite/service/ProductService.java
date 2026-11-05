@@ -14,6 +14,9 @@ import com.google.zxing.qrcode.QRCodeWriter;
 
 import org.example.artiselite.dto.product.ProductResponse;
 import org.example.artiselite.dto.product.ProductRequest;
+import org.example.artiselite.exception.ConflictException;
+import org.example.artiselite.exception.ResourceNotFoundException;
+import org.example.artiselite.security.CostVisibility;
 
 
 import lombok.RequiredArgsConstructor;
@@ -45,7 +48,7 @@ public class ProductService {
     private final BatchRepository batchRepository;
     private final UserRepository userRepository;
     private final AuditService auditService;
-    private final NotificationService notificationService;
+    private final CostVisibility costVisibility;
 
     @Value("${file.upload-dir}")
     private String uploadDir;
@@ -53,7 +56,7 @@ public class ProductService {
     @Transactional
     public ProductResponse createProduct(ProductRequest request) {
         if (productRepository.existsBySku(request.getSku())) {
-            throw new RuntimeException("SKU already exists");
+            throw new ConflictException("SKU already exists");
         }
 
         Product product = Product.builder()
@@ -91,14 +94,13 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public ProductResponse getProduct(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = findActiveProduct(id);
         return mapToResponse(product);
     }
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getAllProducts() {
-        return productRepository.findByIsArchivedFalse().stream()
+        return productRepository.findActiveProducts().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
@@ -112,22 +114,15 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public List<ProductResponse> getLowStockProducts() {
-        List<Product> lowStockProducts = productRepository.findLowStockProducts();
-
-        // Send notification for low stock items
-        if (!lowStockProducts.isEmpty()) {
-            notificationService.sendLowStockAlert(lowStockProducts);
-        }
-
-        return lowStockProducts.stream()
+        // Read-only: alerts are sent from the stock-changing paths (e.g. OutboundService), not on every read
+        return productRepository.findLowStockProducts().stream()
                 .map(this::mapToResponse)
                 .collect(Collectors.toList());
     }
 
     @Transactional
     public ProductResponse updateProduct(Long id, ProductRequest request) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = findActiveProduct(id);
 
         String oldValue = product.toString();
 
@@ -148,8 +143,7 @@ public class ProductService {
 
     @Transactional
     public void archiveProduct(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = findActiveProduct(id);
 
         product.setIsArchived(true);
         productRepository.save(product);
@@ -160,8 +154,7 @@ public class ProductService {
 
     @Transactional
     public void deleteProduct(Long id) {
-        Product product = productRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = findActiveProduct(id);
 
         product.setIsDeleted(true);
         productRepository.save(product);
@@ -173,8 +166,7 @@ public class ProductService {
     // Calculate inventory valuation
     @Transactional(readOnly = true)
     public BigDecimal calculateProductValuation(Long productId) {
-        Product product = productRepository.findById(productId)
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = findActiveProduct(productId);
 
         List<Batch> batches = batchRepository.findByProductIdAndQuantityGreaterThan(
                 productId, 0);
@@ -200,7 +192,7 @@ public class ProductService {
 
     @Transactional(readOnly = true)
     public BigDecimal calculateTotalInventoryValuation() {
-        List<Product> products = productRepository.findByIsArchivedFalse();
+        List<Product> products = productRepository.findActiveProducts();
 
         return products.stream()
                 .map(product -> calculateProductValuation(product.getId()))
@@ -237,16 +229,24 @@ public class ProductService {
         response.setQuantity(product.getQuantity());
         response.setLowStockThreshold(product.getLowStockThreshold());
         response.setUnitPrice(product.getUnitPrice());
-        response.setAverageCost(product.getAverageCost());
         response.setBarcodeData(product.getBarcodeData());
         response.setBarcodeImagePath(product.getBarcodeImagePath());
         response.setIsArchived(product.getIsArchived());
         response.setIsLowStock(product.getQuantity() <= product.getLowStockThreshold());
-        response.setTotalValue(calculateProductValuation(product.getId()));
+        // Cost fields stay null for roles that may not see cost data
+        if (costVisibility.canViewCostData()) {
+            response.setAverageCost(product.getAverageCost());
+            response.setTotalValue(calculateProductValuation(product.getId()));
+        }
         response.setCreatedAt(product.getCreatedAt());
         response.setUpdatedAt(product.getUpdatedAt());
 
         return response;
+    }
+
+    private Product findActiveProduct(Long id) {
+        return productRepository.findByIdAndIsDeletedFalse(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
     }
 
     private Long getCurrentUserId() {

@@ -1,8 +1,11 @@
 package org.example.artiselite.service;
+import org.example.artiselite.common.BusinessTime;
 import org.example.artiselite.dto.inbound.InboundRequest;
 import org.example.artiselite.dto.inbound.InboundResponse;
 import org.example.artiselite.entity.*;
 import org.example.artiselite.repository.*;
+import org.example.artiselite.exception.ResourceNotFoundException;
+import org.example.artiselite.security.CostVisibility;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -33,16 +36,18 @@ public class InboundService {
     private final UserRepository userRepository;
     private final AuditService auditService;
     private final NotificationService notificationService;
+    private final CostVisibility costVisibility;
+    private final BusinessTime businessTime;
 
     @Transactional
     public InboundResponse createInbound(InboundRequest request, MultipartFile document) {
-        Product product = productRepository.findById(request.getProductId())
-                .orElseThrow(() -> new RuntimeException("Product not found"));
+        Product product = productRepository.findByIdAndIsDeletedFalse(request.getProductId())
+                .orElseThrow(() -> new ResourceNotFoundException("Product not found"));
 
         Supplier supplier = null;
         if (request.getSupplierId() != null) {
             supplier = supplierRepository.findById(request.getSupplierId())
-                    .orElseThrow(() -> new RuntimeException("Supplier not found"));
+                    .orElseThrow(() -> new ResourceNotFoundException("Supplier not found"));
         }
 
         User currentUser = getCurrentUser();
@@ -52,7 +57,7 @@ public class InboundService {
                 .supplier(supplier)
                 .quantity(request.getQuantity())
                 .receivedDate(request.getReceivedDate() != null ?
-                        request.getReceivedDate() : LocalDate.now())
+                        request.getReceivedDate() : businessTime.today())
                 .invoiceReference(request.getInvoiceReference())
                 .batchNumber(request.getBatchNumber())
                 .expiryDate(request.getExpiryDate())
@@ -133,7 +138,7 @@ public class InboundService {
     @Transactional(readOnly = true)
     public InboundResponse getInbound(Long id) {
         Inbound inbound = inboundRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("Inbound not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Inbound not found"));
         return mapToResponse(inbound);
     }
 
@@ -156,7 +161,9 @@ public class InboundService {
         response.setDocumentPath(inbound.getDocumentPath());
         response.setBatchNumber(inbound.getBatchNumber());
         response.setExpiryDate(inbound.getExpiryDate());
-        response.setUnitCost(inbound.getUnitCost());
+        if (costVisibility.canViewCostData()) {
+            response.setUnitCost(inbound.getUnitCost());
+        }
         response.setNotes(inbound.getNotes());
 
         if (inbound.getSupplier() != null) {

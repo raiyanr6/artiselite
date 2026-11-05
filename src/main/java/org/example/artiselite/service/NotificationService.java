@@ -21,7 +21,16 @@ public class NotificationService {
         Map<String, Object> notification = new HashMap<>();
         notification.put("type", "LOW_STOCK_ALERT");
         notification.put("message", products.size() + " products are below threshold");
-        notification.put("products", products);
+        // Plain maps, not entities: entities drag in lazy relations (Product.batches -> Batch.product)
+        // and cost fields that every subscriber would receive
+        notification.put("products", products.stream()
+                .map(p -> Map.of(
+                        "id", p.getId(),
+                        "sku", p.getSku(),
+                        "name", p.getName(),
+                        "quantity", p.getQuantity(),
+                        "lowStockThreshold", p.getLowStockThreshold()))
+                .toList());
         notification.put("timestamp", LocalDateTime.now());
 
         messagingTemplate.convertAndSend("/topic/notifications", notification);

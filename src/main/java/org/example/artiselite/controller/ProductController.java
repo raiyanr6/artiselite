@@ -50,7 +50,7 @@ public class ProductController {
     }
 
     @PutMapping("/{id}")
-    //@PreAuthorize("hasAnyAuthority('INVENTORY_WRITE', 'ADMIN', 'MANAGER')")
+    @PreAuthorize("hasAnyAuthority('INVENTORY_WRITE', 'ADMIN', 'MANAGER')")
     public ResponseEntity<ProductResponse> updateProduct(
             @PathVariable Long id,
             @Valid @RequestBody ProductRequest request) {
@@ -72,13 +72,13 @@ public class ProductController {
     }
 
     @GetMapping("/{id}/valuation")
-    @PreAuthorize("hasAnyAuthority('INVENTORY_READ', 'ADMIN', 'MANAGER')")
+    @PreAuthorize("@costVisibility.canViewCostData()")
     public ResponseEntity<BigDecimal> getProductValuation(@PathVariable Long id) {
         return ResponseEntity.ok(productService.calculateProductValuation(id));
     }
 
     @GetMapping("/valuation/total")
-    @PreAuthorize("hasAnyAuthority('INVENTORY_READ', 'ADMIN', 'MANAGER')")
+    @PreAuthorize("@costVisibility.canViewCostData()")
     public ResponseEntity<BigDecimal> getTotalInventoryValuation() {
         return ResponseEntity.ok(productService.calculateTotalInventoryValuation());
     }

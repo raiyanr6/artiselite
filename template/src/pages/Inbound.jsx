@@ -132,7 +132,8 @@ const Inbound = () => {
                   {inbound.batchNumber || '-'}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  ${inbound.unitCost?.toFixed(2) || '0.00'}
+                  {/* null = hidden for this role or not recorded; show a dash, not a false 0.00 */}
+                  {inbound.unitCost != null ? `$${Number(inbound.unitCost).toFixed(2)}` : '—'}
                 </td>
               </tr>
             ))}
